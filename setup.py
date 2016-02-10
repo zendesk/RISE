@@ -1,38 +1,91 @@
+# encoding: utf-8
+
 import os
-from notebook.nbextensions import install_nbextension
-from notebook.services.config import ConfigManager
-
-livereveal_dir = os.path.join(os.path.dirname(__file__), 'livereveal')
-
-def install(use_symlink=False, enable=True):
-    # Install the livereveal code.
-    install_nbextension(livereveal_dir, symlink=use_symlink,
-                        overwrite=use_symlink, user=True)
-
-    if enable:
-        cm = ConfigManager()
-        cm.update('notebook', {"load_extensions": {"livereveal/main": True}})
-
-def main():
-    import argparse
-    import sys
-
-    parser = argparse.ArgumentParser()
-    subparsers = parser.add_subparsers(title='subcommands',
-                                       description='valid subcommands',
-                                       help='additional help')
-
-    install_parser = subparsers.add_parser('install')
-    install_parser.add_argument('--develop', action='store_true',
-                                help="Install livereveal  as a symlink to the source.")
-    install_parser.add_argument('--no-enable', action='store_true',
-                                help="Install but don't enable the extension.")
-
-    args = parser.parse_args(sys.argv[1:])
-
-    install(use_symlink=args.develop,
-            enable=(not args.no_enable))
+from setuptools import find_packages, setup
+from setuptools.command.install import install
+from setuptools.command.develop import develop
+from distutils.core import Command
+from distutils.sysconfig import get_python_lib
+from pkg_resources import resource_filename
 
 
-if __name__ == '__main__':
-    main()
+class InstallRise(install):
+    def run(self):
+        install.run(self)
+
+    sub_commands = install.sub_commands + [('install_extension', lambda self: True)]
+
+
+class DevelopRise(develop):
+    def run(self):
+        develop.run(self)
+        source = os.path.join(self.egg_path, 'livereveal')
+        InstallExtension(self.distribution, source=source).run()
+
+
+class InstallExtension(Command):
+    user_options = [
+        # Select installation scheme and set base director(y|ies)
+        ('develop', None,
+         "Install livereal as a symlink to the source."),
+        ('no-enable', None,
+         "(Unix only) prefix for platform-specific files")]
+
+    boolean_options = ['develop', 'no-enable']
+
+    def __init__(self, distribution, source=None):
+        Command.__init__(self, distribution)
+        self.source = source
+
+    def initialize_options(self):
+        self.develop = None
+        self.no_enable = None
+
+    def finalize_options(self):
+        pass
+
+    def run(self):
+        from notebook.nbextensions import install_nbextension
+        if self.source:
+            livereveal_dir = self.source
+        else:
+            lib_dir = os.path.join(get_python_lib(), 'livereveal')
+            if os.path.exists(lib_dir):
+                livereveal_dir = lib_dir
+            else:
+                livereveal_dir = os.path.join(os.path.dirname(__file__), 'livereveal')
+        install_nbextension(livereveal_dir, symlink=self.develop,
+                            overwrite=self.develop, user=True)
+
+        if not self.no_enable:
+            from notebook.services.config import ConfigManager
+            cm = ConfigManager()
+            cm.update('notebook', {"load_extensions": {"livereveal/main": True}})
+
+
+setup(name='livereveal',
+      version='0.0.1',
+      description='"Live" Reveal.js Jupyter/IPython Slideshow Extension',
+      author=u'Damián Avila',
+      url='https://github.com/damianavila/RISE',
+      long_description=open('README.md').read(),
+      cmdclass={'install': InstallRise,
+                'develop': DevelopRise,
+                'install_extension': InstallExtension},
+      setup_requires=['notebook'],
+      packages=['livereveal'],
+      package_data={'livereveal': ['main.js',
+                                   '*.css',
+                                   'reveal.js/css/*.css',
+                                   'reveal.js/css/print/*.css',
+                                   'reveal.js/css/theme/*.css',
+                                   'reveal.js/js/*.js',
+                                   'reveal.js/lib/*/*',
+                                   'reveal.js/plugin/*/*']},
+      zip_safe=False,
+      keywords='python jupyter ipython javascript nbextension extension',
+      classifiers=['Development Status :: 4 - Beta',
+                   'Programming Language :: Python',
+                   'Programming Language :: Python :: 2.7',
+                   'License :: OSI Approved'],
+)
