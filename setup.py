@@ -44,6 +44,9 @@ class InstallExtension(Command):
     def finalize_options(self):
         pass
 
+    def get_outputs(self):
+        return []
+
     def run(self):
         from notebook.nbextensions import install_nbextension
         if self.source:
